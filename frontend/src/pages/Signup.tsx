@@ -1,9 +1,13 @@
-import React, { ReactElement, useState } from 'react';
+import React, { ReactElement, useEffect, useState } from 'react';
 import { Container, TextField, Button, Typography, Box, Paper, InputAdornment, IconButton } from '@mui/material';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import Visibility from '@mui/icons-material/Visibility';
 import VisibilityOff from '@mui/icons-material/VisibilityOff';
+import { useAuth } from '../context/AuthContext';
+import { LoadingButton } from '@mui/lab';
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 const Signup = (): ReactElement => {
   const {
@@ -13,9 +17,20 @@ const Signup = (): ReactElement => {
   } = useForm();
 
   const [showPassword, setShowPassword] = useState(false);
-  const handleShowPassword = () => setShowPassword((prev)=> !prev);
+  const [loading, setLoading] = useState(false);
+  const handleShowPassword = () => setShowPassword((prev) => !prev);
 
-  const onSubmit = (data: any) => console.log('data--->', data);
+  const { registerAsync } = useAuth();
+  const navigate = useNavigate();
+
+  const onSubmit = async (data: any) => {
+    const result = await registerAsync(data);
+    if (result?.success) {
+      navigate('/login', { state: { message: result?.message || 'User created successfully' } });
+    }
+    setLoading(false);
+  };
+
   return (
     <Container
       maxWidth="sm"
@@ -42,7 +57,7 @@ const Signup = (): ReactElement => {
         <Typography variant="h4" sx={{ marginBottom: '1.5rem' }}>
           Sign Up
         </Typography>
-        <form noValidate onSubmit={handleSubmit((data)=> console.log("data", data))}>
+        <form noValidate onSubmit={handleSubmit(async (data) => await onSubmit(data))}>
           <TextField
             required
             fullWidth
@@ -54,9 +69,9 @@ const Signup = (): ReactElement => {
                 value: true,
               },
             })}
-            error={errors.firstName}  // Display error state
+            error={errors.firstName} // Display error state
             helperText={errors.firstName?.message} // Show the error message
-            sx={{ width: '100%' }}  // Ensures the TextField maintains full width
+            sx={{ width: '100%' }} // Ensures the TextField maintains full width
           />
           <TextField
             required
@@ -83,10 +98,10 @@ const Signup = (): ReactElement => {
                 message: 'Email is required',
                 value: true,
               },
-              pattern : {
-                value : /^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}$/i,
-                message : "Invalid email address"
-              }
+              pattern: {
+                value: /^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}$/i,
+                message: 'Invalid email address',
+              },
             })}
             error={errors?.email}
             helperText={errors?.email?.message}
@@ -110,17 +125,15 @@ const Signup = (): ReactElement => {
             InputProps={{
               endAdornment: (
                 <InputAdornment position="end">
-                  <IconButton
-                    aria-label="toggle password visibility"
-                    onClick={handleShowPassword}
-                  >
+                  <IconButton aria-label="toggle password visibility" onClick={handleShowPassword}>
                     {showPassword ? <Visibility /> : <VisibilityOff />}
                   </IconButton>
                 </InputAdornment>
               ),
-            }} 
+            }}
           />
-          <Button
+          <LoadingButton
+            loading={loading}
             sx={{
               padding: '0.75rem',
               marginTop: '1rem',
@@ -131,7 +144,8 @@ const Signup = (): ReactElement => {
             fullWidth
           >
             Sign Up
-          </Button>
+          </LoadingButton>
+          <ToastContainer />
         </form>
 
         <Typography variant="body1" sx={{ marginTop: '1.5rem' }}>

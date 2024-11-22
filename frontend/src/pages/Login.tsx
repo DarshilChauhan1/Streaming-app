@@ -1,9 +1,13 @@
 import { Button, Container, IconButton, InputAdornment, Paper, TextField, Typography } from '@mui/material';
-import { Link } from 'react-router-dom';
-import React, { useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import React, { useEffect, useRef, useState } from 'react';
 import { set, useForm } from 'react-hook-form';
 import Visibility from '@mui/icons-material/Visibility';
 import VisibilityOff from '@mui/icons-material/VisibilityOff';
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
+import { useAuth } from '../context/AuthContext';
+import { LoadingButton } from '@mui/lab';
 
 const Login = () => {
   const {
@@ -13,9 +17,19 @@ const Login = () => {
     formState: { errors },
   } = useForm();
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const handleShowPassword = () => setShowPassword((prev)=> !prev);
-  const onSubmit = (data: any) => console.log('data--->', data);
+  const handleShowPassword = () => setShowPassword((prev) => !prev);
+  const { login } = useAuth();
+  const navigate = useNavigate();
+
+  const onSubmit = async (data: any) => {
+    const response = await login(data);
+    if (response?.data?.success) {
+      toast.success(response?.data?.message);
+      navigate('/home');
+    }
+  };
 
   return (
     <Container
@@ -42,7 +56,7 @@ const Login = () => {
         <Typography variant="h4" sx={{ marginBottom: '1.5rem' }}>
           Login
         </Typography>
-        <form noValidate onSubmit={handleSubmit((data)=> console.log("data", data))}>
+        <form noValidate onSubmit={handleSubmit(async (data) => await onSubmit(data))}>
           <TextField
             required
             fullWidth
@@ -61,7 +75,6 @@ const Login = () => {
             error={errors?.email}
             helperText={errors?.email?.message}
             sx={{ width: '100%' }}
-            
           />
           <TextField
             required
@@ -81,17 +94,15 @@ const Login = () => {
             InputProps={{
               endAdornment: (
                 <InputAdornment position="end">
-                  <IconButton
-                    aria-label="toggle password visibility"
-                    onClick={handleShowPassword}
-                  >
+                  <IconButton aria-label="toggle password visibility" onClick={handleShowPassword}>
                     {showPassword ? <Visibility /> : <VisibilityOff />}
                   </IconButton>
                 </InputAdornment>
               ),
-            }}      
+            }}
           />
-          <Button
+          <LoadingButton
+            loading={loading}
             sx={{
               padding: '0.75rem',
               marginTop: '1rem',
@@ -102,8 +113,9 @@ const Login = () => {
             fullWidth
           >
             Login
-          </Button>
+          </LoadingButton>
         </form>
+        <ToastContainer />
 
         <Typography variant="body1" sx={{ marginTop: '1.5rem' }}>
           Create an account{'   '}

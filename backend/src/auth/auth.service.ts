@@ -7,6 +7,7 @@ import { PrismaService } from 'src/database/database.service';
 export class AuthService {
   constructor(private prismaService : PrismaService) {}
   async create(createAuthDto: CreateAuthDto) {
+    console.log(createAuthDto)
     try {
       const checkUser = await this.prismaService.user.findUnique({
         where: {
@@ -27,7 +28,7 @@ export class AuthService {
         data : user
       }
     } catch (error) {
-      throw new Error(error)
+      throw error
     }
   }
 
