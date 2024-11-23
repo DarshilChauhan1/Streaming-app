@@ -1,0 +1,5 @@
+-- CreateEnum
+CREATE TYPE "Status" AS ENUM ('PROCESSING', 'COMPLETED', 'FAILED');
+
+-- AlterTable
+ALTER TABLE "Post" ADD COLUMN     "status" "Status" NOT NULL DEFAULT 'PROCESSING';

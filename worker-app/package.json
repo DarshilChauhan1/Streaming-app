@@ -1,0 +1,26 @@
+{
+  "name": "worker-app",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "npm run build && node dist/src/worker.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@aws-sdk/types": "^3.696.0",
+    "aws-sdk": "^2.1692.0",
+    "axios": "^1.7.7",
+    "dotenv": "^16.4.5",
+    "tsc-watch": "^6.2.1",
+    "typescript": "^5.7.2"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.145",
+    "@types/node": "^22.9.3"
+  }
+}
