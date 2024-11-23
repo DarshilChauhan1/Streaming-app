@@ -13,7 +13,6 @@ const Login = () => {
   const {
     register,
     handleSubmit,
-    watch,
     formState: { errors },
   } = useForm();
   const [showPassword, setShowPassword] = useState(false);
@@ -25,10 +24,10 @@ const Login = () => {
 
   const onSubmit = async (data: any) => {
     const response = await login(data);
-    if (response?.data?.success) {
-      toast.success(response?.data?.message);
+    if (response?.success) {
       navigate('/home');
     }
+    setLoading(false);
   };
 
   return (
@@ -115,7 +114,6 @@ const Login = () => {
             Login
           </LoadingButton>
         </form>
-        <ToastContainer />
 
         <Typography variant="body1" sx={{ marginTop: '1.5rem' }}>
           Create an account{'   '}

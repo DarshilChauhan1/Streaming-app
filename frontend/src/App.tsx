@@ -6,7 +6,7 @@ import { Route, Routes } from 'react-router-dom';
 import Signup from './pages/Signup';
 import Login from './pages/Login';
 import Home from './pages/Home';
-import UploadVideo from './components/UploadVideo';
+import UploadVideo from './pages/UploadVideo';
 import NotFound from './pages/NotFound';
 
 function App() {

@@ -145,7 +145,6 @@ const Signup = (): ReactElement => {
           >
             Sign Up
           </LoadingButton>
-          <ToastContainer />
         </form>
 
         <Typography variant="body1" sx={{ marginTop: '1.5rem' }}>

@@ -1,7 +1,7 @@
 import { createContext, useContext, useState } from 'react';
-import { login, logout, register } from '../api/index';
+import { apiLogin, logout, apiRegister } from '../api/index';
 import { AxiosError } from 'axios';
-import { ToastContainer, toast } from 'react-toastify';
+import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
 export const AuthContext = createContext<{
@@ -22,27 +22,26 @@ const useAuth = () => useContext(AuthContext);
 
 const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(false); // Changed from Loading to loading
 
   const login = async (data: { email: string; password: string }) => {
     try {
-      const response = await login(data);
-      console.log("response", response);
+      const response = await apiLogin(data);
       setUser(response?.data?.data);
+      if (response?.data?.success) {
+        toast.success(response?.data?.message);
+      } else {
+        toast.error(response?.data?.message);
+      }
+      return response?.data;
     } catch (error) {
       console.log(error);
-    } finally {
-      setLoading(false);
     }
   };
 
   const registerAsync = async (data: { firstName: string; lastName: string; email: string; password: string }) => {
-    console.log(data);
-    setLoading(true);
     try {
-      const response = await register(data);
+      const response = await apiRegister(data);
       setUser(response.data);
-      console.log(response);
       if (response?.data?.success) {
         toast.success(response?.data?.message);
       } else {
@@ -54,28 +53,20 @@ const AuthProvider = ({ children }) => {
         return error?.response?.data;
       }
       console.log(error);
-    } finally {
-      setLoading(false);
-    }
+    } 
   };
 
   const logout = async () => {
-    setLoading(true);
     try {
       await logout();
       setUser(null);
     } catch (error) {
       console.log(error);
-    } finally {
-      setLoading(false);
     }
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, registerAsync, logout, loading }}>
-      <ToastContainer />
-      {children}
-    </AuthContext.Provider>
+    <AuthContext.Provider value={{ user, login, registerAsync, logout }}>{children}</AuthContext.Provider>
   );
 };
 
