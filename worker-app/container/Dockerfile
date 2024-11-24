@@ -6,6 +6,7 @@ RUN apt-get update && \
     curl -sL https://deb.nodesource.com/setup_18.x | bash - && \
     apt-get update && \
     apt-get upgrade -y && \
+    apt install -y nano && \
     apt-get install -y nodejs ffmpeg
 
 # Set the working directory
@@ -19,9 +20,6 @@ RUN npm install
 
 # Copy the rest of the application code
 COPY . .
-
-# Expose the port the app runs on
-EXPOSE 3000
 
 # Define the command to run the application
 ENTRYPOINT [ "bash" ]

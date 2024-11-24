@@ -21,6 +21,8 @@ export class UploadsService  {
     try {
       // safe parse the json
       const payload = JSON.parse(body.payload);
+      console.log(files);
+      console.log(payload);
       if (!payload.title || !payload.description)  throw new BadRequestException('Title and description are required');
       const videoFile = files[0];
       const thumbnailFile = files[1];
@@ -32,11 +34,13 @@ export class UploadsService  {
         Expires : 3600 
       }
 
+      console.log("processing")
       const videoUploadResponse = await this.awsClientS3.upload({
         Bucket: process.env.AWS_BUCKET_NAME,
         Key: `videos/${videoFile.originalname}`,
         Body: videoFile.buffer,
       }).promise();
+      console.log("uploaded")
 
       const thumbnailUploadResponse = await this.awsClientS3.upload({
         Bucket: process.env.AWS_BUCKET_NAME_2,
@@ -50,7 +54,7 @@ export class UploadsService  {
           title: payload.title,
           description: payload.description,
           thumbnailUrl: thumbnailUploadResponse.Location,
-          userId : '6b1b3126-d46e-46ac-910f-bba87fe670ad',
+          userId : '858ae659-c871-487c-b3dc-ac3c116df4b4',
           m3u8Url : ''
         }
       })

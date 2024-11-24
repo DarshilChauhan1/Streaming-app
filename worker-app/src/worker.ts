@@ -6,7 +6,6 @@ dotenv.config();
 
 const pollingSQS = async () => {
     try {
-        console.log(process.env.AWS_ACCESS_KEY);
         AWS.config.update({
             accessKeyId: process.env.AWS_ACCESS_KEY,
             secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
@@ -24,7 +23,7 @@ const pollingSQS = async () => {
         while (true) {
             const reponse = await awsClientSQS.receiveMessage(params).promise();
             if (reponse.Messages) {
-                const { Messages, $response } = reponse;
+                const { Messages } = reponse;
                 for (const message of Messages) {
                     const { Body, ReceiptHandle } = message;
                     if (!Body) continue;
@@ -43,6 +42,12 @@ const pollingSQS = async () => {
                         Key: object.key
                     }
                     // ECS Docker spin up
+                    // delete the message from the queue
+                    await awsClientSQS.deleteMessage({
+                        QueueUrl: process.env.AWS_SQS_URL as string,
+                        ReceiptHandle: ReceiptHandle as string
+                    }).promise();
+                    console.log('Message deleted from the queue');
                 }
 
             }
@@ -50,7 +55,9 @@ const pollingSQS = async () => {
         }
 
     } catch (error) {
-        console.log('error', error);
+        // if any error occurs, log it and retry after 5 seconds
+        console.log(error);
+        console.log("error generating the message"); 
     }
 }
 pollingSQS();

@@ -2,8 +2,8 @@ const AWS = require('aws-sdk');
 const dotenv = require('dotenv');
 const fs = require('fs');
 const Fs = require('node:fs/promises');
-const ffmpeg = require('fluent-ffmpeg');
 const path = require('path');
+const exec = require('child_process').exec;
 
 dotenv.config();
 
@@ -21,14 +21,11 @@ const videoProcess = async () => {
             Key: process.env.AWS_BUCKET_KEY
         };
         const videoFile = await awsS3Client.getObject(params).promise();
-        console.log('Video file:', videoFile);
 
         const videoFilePath = path.join('/tmp', process.env.AWS_BUCKET_KEY); // Ensure correct temp path
-        console.log('Video file path:', videoFilePath);
 
         // Ensure the directory exists
         const videoDir = path.dirname(videoFilePath);
-        console.log('Video directory:', videoDir);
         if (!fs.existsSync(videoDir)) {
             fs.mkdirSync(videoDir, { recursive: true });
             console.log('Directory created:', videoDir);
@@ -36,57 +33,82 @@ const videoProcess = async () => {
 
         await fs.promises.writeFile(videoFilePath, videoFile.Body); // Write video to file
 
-        // Process video with FFmpeg
-        await processVideo();
+        const inputPath = `/tmp/${process.env.AWS_BUCKET_KEY}`;
+        const outputPath = `${process.env.AWS_BUCKET_KEY}`;
+        if (!fs.existsSync(outputPath)) {
+            fs.mkdirSync(outputPath, { recursive: true });
+        }
+        await convertToHls(inputPath, outputPath);
+
+        // Generate master playlist
+        await generateMasterPlaylist(outputPath);
 
         // Upload processed video files to another S3 bucket
-        const outputDir = `/outputs/${process.env.AWS_BUCKET_KEY}`;
+        const outputDir = `${process.env.AWS_BUCKET_KEY}`;
         const files = fs.readdirSync(outputDir);
-        console.log('Files:', files);
 
-        for (const file of files) {
-            const filePath = path.join(outputDir, file);
-            const fileContent = fs.createReadStream(filePath);
-
-            const processedVideoUploadParams = {
+        for await (const file of files) {
+            const fileStream = fs.createReadStream(`${outputDir}/${file}`);
+            const uploadParams = {
                 Bucket: process.env.AWS_BUCKET_NAME_2,
-                Key: `${process.env.AWS_BUCKET_KEY}/${file}`,
-                Body: fileContent
-            };
-
-            const upload = await awsS3Client.upload(processedVideoUploadParams).promise();
-            console.log('Uploaded:', upload.Location);
+                Key: `${outputDir}/${file}`,
+                Body: fileStream
+            }
+            await awsS3Client.upload(uploadParams).promise();
         }
+        console.log('Files uploaded to S3:');
+        // unlink the files
+        fs.unlinkSync(inputPath);
+        fs.rmdirSync(outputPath, { recursive: true });
+
     } catch (error) {
         console.error('Error processing video:', error);
     }
 };
 
-const processVideo = () => {
-    const inputPath = `/tmp/${process.env.AWS_BUCKET_KEY}`;
-    const outputPath = `/outputs/${process.env.AWS_BUCKET_KEY}`;
+const convertToHls = async (inputPath, outputPath) => {
+    const ffmpegCommand = `ffmpeg -hide_banner -y -i "${inputPath}" -vf scale=w=640:h=360:force_original_aspect_ratio=decrease -c:a aac -ar 48000 -c:v h264 -profile:v main -crf 20 -sc_threshold 0 -g 48 -keyint_min 48 -hls_time 4 -hls_playlist_type vod -b:v 800k -maxrate 856k -bufsize 1200k -b:a 96k -hls_segment_filename "${outputPath}"/360p_%03d.ts "${outputPath}"/360p.m3u8 -vf scale=w=842:h=480:force_original_aspect_ratio=decrease -c:a aac -ar 48000 -c:v h264 -profile:v main -crf 20 -sc_threshold 0 -g 48 -keyint_min 48 -hls_time 4 -hls_playlist_type vod -b:v 1400k -maxrate 1498k -bufsize 2100k -b:a 128k -hls_segment_filename "${outputPath}"/480p_%03d.ts "${outputPath}"/480p.m3u8 -vf scale=w=1280:h=720:force_original_aspect_ratio=decrease -c:a aac -ar 48000 -c:v h264 -profile:v main -crf 20 -sc_threshold 0 -g 48 -keyint_min 48 -hls_time 4 -hls_playlist_type vod -b:v 2800k -maxrate 2996k -bufsize 4200k -b:a 128k -hls_segment_filename "${outputPath}"/720p_%03d.ts "${outputPath}"/720p.m3u8 -vf scale=w=1920:h=1080:force_original_aspect_ratio=decrease -c:a aac -ar 48000 -c:v h264 -profile:v main -crf 20 -sc_threshold 0 -g 48 -keyint_min 48 -hls_time 4 -hls_playlist_type vod -b:v 5000k -maxrate 5350k -bufsize 7500k -b:a 192k -hls_segment_filename "${outputPath}"/1080p_%03d.ts "${outputPath}"/1080p.m3u8`
+    return new Promise((resolve, reject) => {
+        exec(ffmpegCommand, (error, stdout, stderr) => {
+            if (error) {
+                console.error('Error converting video to HLS:', error);
+                console.log('FFmpeg output:', stderr);
+                reject(error);
+            }
+            console.log('Video converted to HLS:', stdout);
+            resolve(stdout);
+        });
+    })
 
+};
+
+const generateMasterPlaylist = async (outputPath) => {
+    const renditions = [
+        { resolution: '360p', bandwidth: 800000, file: '360p.m3u8' },
+        { resolution: '480p', bandwidth: 1400000, file: '480p.m3u8' },
+        { resolution: '720p', bandwidth: 2800000, file: '720p.m3u8' },
+        { resolution: '1080p', bandwidth: 5000000, file: '1080p.m3u8' },
+    ];
+
+    // Path to save the master.m3u8
+    const masterFilePath = path.join(outputPath, 'master.m3u8');
+
+    // Ensure the output directory exists
     if (!fs.existsSync(outputPath)) {
         fs.mkdirSync(outputPath, { recursive: true });
     }
 
-    return new Promise((resolve, reject) => {
-        ffmpeg(inputPath)
-            .outputOptions([
-                '-start_number 0',
-                '-hls_time 10',
-                '-hls_list_size 0',
-                '-hls_segment_filename', `${outputPath}/segment%03d.ts`, // Correctly separate option and value
-                '-c:v libx264', // Ensure codec is specified
-                '-c:a aac',
-                '-f hls'
-            ])
-            .output(`${outputPath}/playlist.m3u8`) // M3U8 file
-            .on('end', resolve)
-            .on('error', reject)
-            .run();
-    });
-    
-};
+    // Create the content for the master.m3u8 file
+    let masterContent = '#EXTM3U\n#EXT-X-VERSION:3\n';
 
-// videoProcess().finally(() => process.exit(0));
+    renditions.forEach((rendition) => {
+        masterContent += `#EXT-X-STREAM-INF:BANDWIDTH=${rendition.bandwidth},RESOLUTION=${rendition.resolution}\n`;
+        masterContent += `${rendition.file}\n`;
+    });
+
+    // Write the content to master.m3u8
+    fs.writeFileSync(masterFilePath, masterContent);
+}
+
+
+videoProcess().finally(() => process.exit(0));
