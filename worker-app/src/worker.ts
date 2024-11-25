@@ -12,16 +12,17 @@ const pollingSQS = async () => {
             region: process.env.AWS_REGION
         })
         const awsClientSQS = new AWS.SQS();
+        const awsClientECS = new AWS.ECS();
 
         const params = {
-            QueueUrl: process.env.AWS_SQS_URL as string,
+            QueueUrl: process.env.AWS_SQS_URL,
             MaxNumberOfMessages: 1,
-            VisibilityTimeout: 20,
             WaitTimeSeconds: 20
         }
 
         while (true) {
             const reponse = await awsClientSQS.receiveMessage(params).promise();
+            console.log('Messages received from the queue', reponse);
             if (reponse.Messages) {
                 const { Messages } = reponse;
                 for (const message of Messages) {
@@ -41,8 +42,57 @@ const pollingSQS = async () => {
                         Bucket: bucket.name,
                         Key: object.key
                     }
+                    console.log('Processing the event', params);
                     // ECS Docker spin up
-                    // delete the message from the queue
+                    const taskCommand = {
+                        taskDefinition : process.env.AWS_ECS_TASK_DEFINITION,
+                        cluster : process.env.AWS_ECS_CLUSTER,
+                        launchType : 'FARGATE',
+                        networkConfiguration : {
+                            awsvpcConfiguration : {
+                                subnets : process.env.AWS_SUBNETS.split(','),
+                                assignPublicIp : 'ENABLED'
+                            }
+                        },
+                        overrides : {
+                            containerOverrides : [
+                                {
+                                    name : process.env.AWS_ECS_CONTAINER_NAME,
+                                    environment : [
+                                        {
+                                            name : 'AWS_BUCKET_NAME',
+                                            value : bucket.name
+                                        },
+                                        {
+                                            name : 'AWS_BUCKET_KEY',
+                                            value : object.key
+                                        },
+                                        {
+                                            name : 'AWS_BUCKET_NAME_2',
+                                            value : process.env.AWS_BUCKET_NAME_2
+                                        },
+                                        {
+                                            name : 'AWS_ACCESS_KEY',
+                                            value : process.env.AWS_ACCESS_KEY
+                                        },
+                                        {
+                                            name : 'AWS_SECRET_ACCESS_KEY',
+                                            value : process.env.AWS_SECRET_ACCESS_KEY
+                                        },
+                                        {
+                                            name : 'AWS_REGION',
+                                            value : process.env.AWS_REGION
+                                        }
+                                    ]
+                                }
+                            ]
+                        }  
+                    }
+                    console.log(taskCommand.networkConfiguration.awsvpcConfiguration)
+                    await awsClientECS.runTask(taskCommand).promise();
+                    console.log('Task started in ECS');
+
+                    //delete the message from the queue
                     await awsClientSQS.deleteMessage({
                         QueueUrl: process.env.AWS_SQS_URL as string,
                         ReceiptHandle: ReceiptHandle as string

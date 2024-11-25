@@ -54,7 +54,7 @@ export class UploadsService  {
           title: payload.title,
           description: payload.description,
           thumbnailUrl: thumbnailUploadResponse.Location,
-          userId : '858ae659-c871-487c-b3dc-ac3c116df4b4',
+          userId : '6b1b3126-d46e-46ac-910f-bba87fe670ad',
           m3u8Url : ''
         }
       })

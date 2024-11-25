@@ -21,5 +21,4 @@ RUN npm install
 # Copy the rest of the application code
 COPY . .
 
-# Define the command to run the application
-ENTRYPOINT [ "bash" ]
+CMD [ "node", "index.js" ]

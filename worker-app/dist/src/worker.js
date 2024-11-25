@@ -41,23 +41,23 @@ const dotenv = __importStar(require("dotenv"));
 dotenv.config();
 const pollingSQS = async () => {
     try {
-        console.log(process.env.AWS_ACCESS_KEY);
         aws_sdk_1.default.config.update({
             accessKeyId: process.env.AWS_ACCESS_KEY,
             secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
             region: process.env.AWS_REGION
         });
         const awsClientSQS = new aws_sdk_1.default.SQS();
+        const awsClientECS = new aws_sdk_1.default.ECS();
         const params = {
             QueueUrl: process.env.AWS_SQS_URL,
             MaxNumberOfMessages: 1,
-            VisibilityTimeout: 20,
             WaitTimeSeconds: 20
         };
         while (true) {
             const reponse = await awsClientSQS.receiveMessage(params).promise();
+            console.log('Messages received from the queue', reponse);
             if (reponse.Messages) {
-                const { Messages, $response } = reponse;
+                const { Messages } = reponse;
                 for (const message of Messages) {
                     const { Body, ReceiptHandle } = message;
                     if (!Body)
@@ -72,13 +72,67 @@ const pollingSQS = async () => {
                         Bucket: bucket.name,
                         Key: object.key
                     };
+                    console.log('Processing the event', params);
+                    const taskCommand = {
+                        taskDefinition: process.env.AWS_ECS_TASK_DEFINITION,
+                        cluster: process.env.AWS_ECS_CLUSTER,
+                        launchType: 'FARGATE',
+                        networkConfiguration: {
+                            awsvpcConfiguration: {
+                                subnets: process.env.AWS_SUBNETS.split(','),
+                                assignPublicIp: 'ENABLED'
+                            }
+                        },
+                        overrides: {
+                            containerOverrides: [
+                                {
+                                    name: process.env.AWS_ECS_CONTAINER_NAME,
+                                    environment: [
+                                        {
+                                            name: 'AWS_BUCKET_NAME',
+                                            value: bucket.name
+                                        },
+                                        {
+                                            name: 'AWS_BUCKET_KEY',
+                                            value: object.key
+                                        },
+                                        {
+                                            name: 'AWS_BUCKET_NAME_2',
+                                            value: process.env.AWS_BUCKET_NAME_2
+                                        },
+                                        {
+                                            name: 'AWS_ACCESS_KEY',
+                                            value: process.env.AWS_ACCESS_KEY
+                                        },
+                                        {
+                                            name: 'AWS_SECRET_ACCESS_KEY',
+                                            value: process.env.AWS_SECRET_ACCESS_KEY
+                                        },
+                                        {
+                                            name: 'AWS_REGION',
+                                            value: process.env.AWS_REGION
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    };
+                    console.log(taskCommand.networkConfiguration.awsvpcConfiguration);
+                    await awsClientECS.runTask(taskCommand).promise();
+                    console.log('Task started in ECS');
+                    await awsClientSQS.deleteMessage({
+                        QueueUrl: process.env.AWS_SQS_URL,
+                        ReceiptHandle: ReceiptHandle
+                    }).promise();
+                    console.log('Message deleted from the queue');
                 }
             }
             console.log('No messages in the queue');
         }
     }
     catch (error) {
-        console.log('error', error);
+        console.log(error);
+        console.log("error generating the message");
     }
 };
 pollingSQS();
