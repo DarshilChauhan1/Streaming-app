@@ -36,7 +36,7 @@ model Post {
   description  String
   user         User     @relation(fields: [userId], references: [id])
   userId       String
-  m3u8Url      String?
+  m3u8Url      Json?
   thumbnailUrl String
   status       Status   @default(PROCESSING)
   createdAt    DateTime @default(now())

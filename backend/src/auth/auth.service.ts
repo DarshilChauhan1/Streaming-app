@@ -2,12 +2,15 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { CreateAuthDto, LoginDto } from './dto/create-auth.dto';
 import { UpdateAuthDto } from './dto/update-auth.dto';
 import { PrismaService } from 'src/database/database.service';
+import { JwtService } from '@nestjs/jwt';
+import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class AuthService {
-  constructor(private prismaService : PrismaService) {}
+  constructor(
+    private jwtService : JwtService,
+    private prismaService : PrismaService) {}
   async create(createAuthDto: CreateAuthDto) {
-    console.log(createAuthDto)
     try {
       const checkUser = await this.prismaService.user.findUnique({
         where: {
@@ -15,17 +18,20 @@ export class AuthService {
         }
       })
       if(checkUser) throw new BadRequestException('User already exists')
+
+      const hashedPassword = await bcrypt.hash(createAuthDto.password, 10)
       const user = await this.prismaService.user.create({
         data: {
-          email: createAuthDto.email,
-          password: createAuthDto.password
+          ...createAuthDto,
+          password: hashedPassword
         }
       })
+      const { password, ...userData } = user
       return {
         message: 'User created successfully',
         success : true,
         statusCode : 201,
-        data : user
+        data : userData
       }
     } catch (error) {
       throw error
@@ -40,15 +46,35 @@ export class AuthService {
         }
       })
       if(!user) throw new BadRequestException('User does not exist')
-      if(user.password !== payload.password) throw new BadRequestException('Invalid password')
+      // compare the password
+      const isPasswordValid = await bcrypt.compare(payload.password, user.password)
+
+      if(!isPasswordValid) throw new BadRequestException('Invalid password')
+      const tokens = await this.generateTokens(user.id)
+
+      const { password, ...userData } = user
+      
       return {
         message: 'Login successful',
         success : true,
         statusCode : 200,
-        data : user
+        data : {
+          userData,
+          tokens
+        }
       }
     } catch (error) {
       throw error
+    }
+  }
+
+  async generateTokens(userId : string){
+    const payload = { userId }
+    const accessToken = await this.jwtService.signAsync(payload, { expiresIn: '10h', secret : process.env.JWT_SECRET} );
+    const refreshToken = await this.jwtService.signAsync(payload, { expiresIn : '30d', secret : process.env.JWT_REFRESH_SECRET});
+    return {
+      accessToken,
+      refreshToken
     }
   }
 

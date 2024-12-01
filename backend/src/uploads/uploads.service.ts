@@ -2,12 +2,14 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { UpdateUploadDto } from './dto/update-upload.dto';
 import * as AWS from 'aws-sdk';
 import { PrismaService } from 'src/database/database.service';
+import { JwtService } from '@nestjs/jwt'
 
 @Injectable()
 export class UploadsService  {
   private awsClientS3 : AWS.S3;
   private awsClientSQS : AWS.SQS;
-  constructor(private prismaService : PrismaService){
+  constructor(
+    private prismaService : PrismaService){
     AWS.config.update({
       accessKeyId: process.env.AWS_ACCESS_KEY,
       secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
@@ -21,23 +23,23 @@ export class UploadsService  {
     try {
       // safe parse the json
       const payload = JSON.parse(body.payload);
-      console.log(files);
-      console.log(payload);
-      if (!payload.title || !payload.description)  throw new BadRequestException('Title and description are required');
+      if (!payload.title && !payload.description && !payload.userId)  throw new BadRequestException('Title and description are required');
       const videoFile = files[0];
       const thumbnailFile = files[1];
       
       // upload video
       const videoUploadParams = {
         Bucket: process.env.AWS_BUCKET_NAME,
-        Key: `videos/${videoFile.originalname}`,
+        Key: videoFile.originalname,
         Expires : 3600 
       }
 
-      console.log("processing")
+      // remove extra spaces and special characters in originalname
+      const updatedUrl = videoFile.originalname.replace(/[^a-zA-Z0-9.]/g, "_");
+
       const videoUploadResponse = await this.awsClientS3.upload({
         Bucket: process.env.AWS_BUCKET_NAME,
-        Key: `videos/${videoFile.originalname}`,
+        Key: updatedUrl,
         Body: videoFile.buffer,
       }).promise();
       console.log("uploaded")
@@ -54,13 +56,12 @@ export class UploadsService  {
           title: payload.title,
           description: payload.description,
           thumbnailUrl: thumbnailUploadResponse.Location,
-          userId : '6b1b3126-d46e-46ac-910f-bba87fe670ad',
-          m3u8Url : ''
+          userId : payload.userId,
+          status : 'PROCESSING'
         }
       })
       return {
-        message: 'Upload successfull',
-        data: saveToDB,
+        message: 'Video is processing',
         statusCode : 200
       }
 
@@ -69,19 +70,41 @@ export class UploadsService  {
     }
   }
 
-  findAll() {
-    return `This action returns all uploads`;
-  }
+  async getUploadedFiles(payload : any, userId : string) {
+    try {
+      console.log(payload)
+      // find the user post 
+      const posts = await this.prismaService.post.findFirst({
+        where: {
+          userId,
+          status: 'PROCESSING'
+        }
+      })
+      if(!posts) {
+        return {
+          message: 'No posts found',
+          statusCode : 200
+        }
+      }
+      // if there is posts then store the m3u8Urls 
+      //save the direct payload in the post
+      await this.prismaService.post.update({
+        where : {
+          id : posts.id,
 
-  findOne(id: number) {
-    return `This action returns a #${id} upload`;
-  }
-
-  update(id: number, updateUploadDto: UpdateUploadDto) {
-    return `This action updates a #${id} upload`;
-  }
-
-  remove(id: number) {
-    return `This action removes a #${id} upload`;
+        },
+        data : {
+          m3u8Url : payload,
+          status : 'COMPLETED'
+        }
+      })
+      
+      return {
+        message: 'Video is uploaded',
+        statusCode : 200
+      }
+    } catch (error) {
+      console.log(error);
+    }
   }
 }
