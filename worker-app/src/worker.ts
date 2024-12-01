@@ -1,5 +1,4 @@
 import AWS from 'aws-sdk';
-import type { S3Event } from 'aws-lambda';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
@@ -42,53 +41,37 @@ const pollingSQS = async () => {
                         Bucket: bucket.name,
                         Key: object.key
                     }
+                    const decodedKey = decodeURIComponent(params.Key);
+                    console.log('Processing the event', decodedKey);
                     console.log('Processing the event', params);
-                    // ECS Docker spin up
+                    //ECS Docker spin up
                     const taskCommand = {
-                        taskDefinition : process.env.AWS_ECS_TASK_DEFINITION,
-                        cluster : process.env.AWS_ECS_CLUSTER,
-                        launchType : 'FARGATE',
-                        networkConfiguration : {
-                            awsvpcConfiguration : {
-                                subnets : process.env.AWS_SUBNETS.split(','),
-                                assignPublicIp : 'ENABLED'
+                        taskDefinition: process.env.AWS_ECS_TASK_DEFINITION,
+                        cluster: process.env.AWS_ECS_CLUSTER,
+                        launchType: 'FARGATE',
+                        networkConfiguration: {
+                            awsvpcConfiguration: {
+                                subnets: process.env.AWS_SUBNETS.split(','),
+                                assignPublicIp: 'ENABLED'
                             }
                         },
-                        overrides : {
-                            containerOverrides : [
+                        overrides: {
+                            containerOverrides: [
                                 {
-                                    name : process.env.AWS_ECS_CONTAINER_NAME,
-                                    environment : [
-                                        {
-                                            name : 'AWS_BUCKET_NAME',
-                                            value : bucket.name
-                                        },
-                                        {
-                                            name : 'AWS_BUCKET_KEY',
-                                            value : object.key
-                                        },
-                                        {
-                                            name : 'AWS_BUCKET_NAME_2',
-                                            value : process.env.AWS_BUCKET_NAME_2
-                                        },
-                                        {
-                                            name : 'AWS_ACCESS_KEY',
-                                            value : process.env.AWS_ACCESS_KEY
-                                        },
-                                        {
-                                            name : 'AWS_SECRET_ACCESS_KEY',
-                                            value : process.env.AWS_SECRET_ACCESS_KEY
-                                        },
-                                        {
-                                            name : 'AWS_REGION',
-                                            value : process.env.AWS_REGION
-                                        }
+                                    name: process.env.AWS_ECS_CONTAINER_NAME,
+                                    environment: [
+                                        { name: 'AWS_BUCKET_NAME', value: bucket.name },
+                                        { name: 'AWS_BUCKET_KEY', value: object.key },
+                                        { name: 'AWS_BUCKET_NAME_2', value: process.env.AWS_BUCKET_NAME_2 },
+                                        { name: 'AWS_ACCESS_KEY', value: process.env.AWS_ACCESS_KEY },
+                                        { name: 'AWS_SECRET_ACCESS_KEY', value: process.env.AWS_SECRET_ACCESS_KEY },
+                                        { name: 'AWS_REGION', value: process.env.AWS_REGION }
                                     ]
                                 }
                             ]
-                        }  
-                    }
-                    console.log(taskCommand.networkConfiguration.awsvpcConfiguration)
+                        }
+                    };
+
                     await awsClientECS.runTask(taskCommand).promise();
                     console.log('Task started in ECS');
 
@@ -97,6 +80,7 @@ const pollingSQS = async () => {
                         QueueUrl: process.env.AWS_SQS_URL as string,
                         ReceiptHandle: ReceiptHandle as string
                     }).promise();
+                    // send the m3u8 files to the backend api
                     console.log('Message deleted from the queue');
                 }
 
@@ -107,7 +91,7 @@ const pollingSQS = async () => {
     } catch (error) {
         // if any error occurs, log it and retry after 5 seconds
         console.log(error);
-        console.log("error generating the message"); 
+        console.log("error generating the message");
     }
 }
 pollingSQS();

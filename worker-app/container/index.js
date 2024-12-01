@@ -4,6 +4,7 @@ const fs = require('fs');
 const Fs = require('node:fs/promises');
 const path = require('path');
 const exec = require('child_process').exec;
+const axios = require('axios');
 
 dotenv.config();
 
@@ -38,14 +39,19 @@ const videoProcess = async () => {
         if (!fs.existsSync(outputPath)) {
             fs.mkdirSync(outputPath, { recursive: true });
         }
-        await convertToHls(inputPath, outputPath);
+    
+        const fileName = path.basename(outputPath, path.extname(outputPath));
+
+        await convertToHls(inputPath, outputPath, fileName);
 
         // Generate master playlist
-        await generateMasterPlaylist(outputPath);
+        await generateMasterPlaylist(outputPath, fileName);
 
         // Upload processed video files to another S3 bucket
         const outputDir = `${process.env.AWS_BUCKET_KEY}`;
         const files = fs.readdirSync(outputDir);
+
+        const m3u8Files = {};
 
         for await (const file of files) {
             const fileStream = fs.createReadStream(`${outputDir}/${file}`);
@@ -54,20 +60,29 @@ const videoProcess = async () => {
                 Key: `${outputDir}/${file}`,
                 Body: fileStream
             }
-            await awsS3Client.upload(uploadParams).promise();
+            const fileUpload = await awsS3Client.upload(uploadParams).promise();
+            if (file.endsWith('.m3u8') && file.includes('_')) {
+                const quality = file.split('_')[0];
+                m3u8Files[quality] = fileUpload.Location;
+            }
         }
         console.log('Files uploaded to S3:');
         // unlink the files
         fs.unlinkSync(inputPath);
         fs.rmdirSync(outputPath, { recursive: true });
 
+        await axios.post('http://${PUBLIC_IP}:4000/uploads/uploaded-files', {
+            files: m3u8Files,
+            key : process.env.AWS_BUCKET_KEY
+        })
+        
     } catch (error) {
         console.error('Error processing video:', error);
     }
 };
 
-const convertToHls = async (inputPath, outputPath) => {
-    const ffmpegCommand = `ffmpeg -hide_banner -y -i "${inputPath}" -vf scale=w=640:h=360:force_original_aspect_ratio=decrease -c:a aac -ar 48000 -c:v h264 -profile:v main -crf 20 -sc_threshold 0 -g 48 -keyint_min 48 -hls_time 4 -hls_playlist_type vod -b:v 800k -maxrate 856k -bufsize 1200k -b:a 96k -hls_segment_filename "${outputPath}"/360p_%03d.ts "${outputPath}"/360p.m3u8 -vf scale=w=842:h=480:force_original_aspect_ratio=decrease -c:a aac -ar 48000 -c:v h264 -profile:v main -crf 20 -sc_threshold 0 -g 48 -keyint_min 48 -hls_time 4 -hls_playlist_type vod -b:v 1400k -maxrate 1498k -bufsize 2100k -b:a 128k -hls_segment_filename "${outputPath}"/480p_%03d.ts "${outputPath}"/480p.m3u8 -vf scale=w=1280:h=720:force_original_aspect_ratio=decrease -c:a aac -ar 48000 -c:v h264 -profile:v main -crf 20 -sc_threshold 0 -g 48 -keyint_min 48 -hls_time 4 -hls_playlist_type vod -b:v 2800k -maxrate 2996k -bufsize 4200k -b:a 128k -hls_segment_filename "${outputPath}"/720p_%03d.ts "${outputPath}"/720p.m3u8 -vf scale=w=1920:h=1080:force_original_aspect_ratio=decrease -c:a aac -ar 48000 -c:v h264 -profile:v main -crf 20 -sc_threshold 0 -g 48 -keyint_min 48 -hls_time 4 -hls_playlist_type vod -b:v 5000k -maxrate 5350k -bufsize 7500k -b:a 192k -hls_segment_filename "${outputPath}"/1080p_%03d.ts "${outputPath}"/1080p.m3u8`
+const convertToHls = async (inputPath, outputPath, fileName) => {
+    const ffmpegCommand = `ffmpeg -hide_banner -y -i "${inputPath}" -vf scale=w=640:h=360:force_original_aspect_ratio=decrease -c:a aac -ar 48000 -c:v h264 -profile:v main -crf 20 -sc_threshold 0 -g 48 -keyint_min 48 -hls_time 4 -hls_playlist_type vod -b:v 800k -maxrate 856k -bufsize 1200k -b:a 96k -hls_segment_filename "${outputPath}"/360p_%03d.ts "${outputPath}"/360p_${fileName}.m3u8 -vf scale=w=842:h=480:force_original_aspect_ratio=decrease -c:a aac -ar 48000 -c:v h264 -profile:v main -crf 20 -sc_threshold 0 -g 48 -keyint_min 48 -hls_time 4 -hls_playlist_type vod -b:v 1400k -maxrate 1498k -bufsize 2100k -b:a 128k -hls_segment_filename "${outputPath}"/480p_%03d.ts "${outputPath}"/480p_${fileName}.m3u8 -vf scale=w=1280:h=720:force_original_aspect_ratio=decrease -c:a aac -ar 48000 -c:v h264 -profile:v main -crf 20 -sc_threshold 0 -g 48 -keyint_min 48 -hls_time 4 -hls_playlist_type vod -b:v 2800k -maxrate 2996k -bufsize 4200k -b:a 128k -hls_segment_filename "${outputPath}"/720p_%03d.ts "${outputPath}"/720p_${fileName}.m3u8 -vf scale=w=1920:h=1080:force_original_aspect_ratio=decrease -c:a aac -ar 48000 -c:v h264 -profile:v main -crf 20 -sc_threshold 0 -g 48 -keyint_min 48 -hls_time 4 -hls_playlist_type vod -b:v 5000k -maxrate 5350k -bufsize 7500k -b:a 192k -hls_segment_filename "${outputPath}"/1080p_%03d.ts "${outputPath}"/1080p_${fileName}.m3u8`
     
     return new Promise((resolve, reject) => {
         exec(ffmpegCommand, (error, stdout, stderr) => {
@@ -83,16 +98,16 @@ const convertToHls = async (inputPath, outputPath) => {
 
 };
 
-const generateMasterPlaylist = async (outputPath) => {
+const generateMasterPlaylist = async (outputPath, fileName) => {
     const renditions = [
-        { resolution: '360p', bandwidth: 800000, file: '360p.m3u8' },
-        { resolution: '480p', bandwidth: 1400000, file: '480p.m3u8' },
-        { resolution: '720p', bandwidth: 2800000, file: '720p.m3u8' },
-        { resolution: '1080p', bandwidth: 5000000, file: '1080p.m3u8' },
+        { resolution: '360p', bandwidth: 800000, file: `360p_${fileName}.m3u8` },
+        { resolution: '480p', bandwidth: 1400000, file: `480p_${fileName}.m3u8` },
+        { resolution: '720p', bandwidth: 2800000, file: `720p_${fileName}.m3u8` },
+        { resolution: '1080p', bandwidth: 5000000, file: `1080p_${fileName}.m3u8` },
     ];
 
     // Path to save the master.m3u8
-    const masterFilePath = path.join(outputPath, 'master.m3u8');
+    const masterFilePath = path.join(outputPath, `master_${fileName}.m3u8`);
 
     // Ensure the output directory exists
     if (!fs.existsSync(outputPath)) {

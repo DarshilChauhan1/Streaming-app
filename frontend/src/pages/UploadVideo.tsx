@@ -1,12 +1,19 @@
 import { Box, Button, Stack, TextField, Typography } from '@mui/material';
 import React, { useState } from 'react';
 import { apiUpload } from '../api/index';
+import { useAuth } from '../context/AuthContext';
+import { LoadingButton } from '@mui/lab';
+import { toast } from 'react-toastify';
+import { useNavigate } from 'react-router-dom';
 
 const UploadVideo = () => {
   const [file, setFile] = useState<File | null>(null);
   const [thumbnail, setThumbnail] = useState<File | null>(null);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const {user} = useAuth();
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -23,8 +30,11 @@ const UploadVideo = () => {
     }
   };
 
+  const navigate = useNavigate();
+
   const handleSubmit = async()=> {
     try {
+      setLoading(true);
       const formData = new FormData();
       if (file) formData.append('files', file);
       if (thumbnail) formData.append('files', thumbnail);
@@ -33,12 +43,21 @@ const UploadVideo = () => {
         title,
         description,
       };
+      const userId = user?.id;
+      if (userId) payload['userId'] = userId;
+      
       formData.append('payload', JSON.stringify(payload));
 
       const response = await apiUpload(formData);
-      console.log(response);
+      if (response?.data?.success) {
+        toast.success(response?.data?.message);
+        navigate('/home');
+      }
     } catch (error) {
+      toast.error(error?.response?.data?.message);  
       console.log(error);
+    } finally {
+      setLoading(false);
     }
   }
   return (
@@ -65,9 +84,9 @@ const UploadVideo = () => {
       </Button>
       {file && <Typography variant="body1">Video: {file.name}</Typography>}
       {thumbnail && <Typography variant="body1">Thumbnail: {thumbnail.name}</Typography>}
-      <Button variant="contained" color="primary" sx={{ marginTop: '1rem' }} onClick={handleSubmit}>
+      <LoadingButton variant="contained" color="primary" sx={{ marginTop: '1rem' }} onClick={handleSubmit} loading={loading}>
         Upload
-      </Button>
+      </LoadingButton>
     </Box>
   );
 };

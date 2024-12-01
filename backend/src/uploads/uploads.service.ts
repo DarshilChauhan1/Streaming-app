@@ -39,10 +39,9 @@ export class UploadsService  {
 
       const videoUploadResponse = await this.awsClientS3.upload({
         Bucket: process.env.AWS_BUCKET_NAME,
-        Key: updatedUrl,
+        Key: `${Date.now()}_${updatedUrl}`,
         Body: videoFile.buffer,
       }).promise();
-      console.log("uploaded")
 
       const thumbnailUploadResponse = await this.awsClientS3.upload({
         Bucket: process.env.AWS_BUCKET_NAME_2,
@@ -57,26 +56,28 @@ export class UploadsService  {
           description: payload.description,
           thumbnailUrl: thumbnailUploadResponse.Location,
           userId : payload.userId,
-          status : 'PROCESSING'
+          status : 'PROCESSING',
+          key : videoUploadResponse.Key
         }
       })
       return {
+        success : true,
         message: 'Video is processing',
         statusCode : 200
       }
 
     } catch (error) {
+      console.log(error)
        throw error
     }
   }
 
-  async getUploadedFiles(payload : any, userId : string) {
+  async getUploadedFiles(payload : any) {
     try {
-      console.log(payload)
       // find the user post 
       const posts = await this.prismaService.post.findFirst({
         where: {
-          userId,
+          key : payload.key,
           status: 'PROCESSING'
         }
       })
@@ -86,20 +87,21 @@ export class UploadsService  {
           statusCode : 200
         }
       }
+
       // if there is posts then store the m3u8Urls 
       //save the direct payload in the post
       await this.prismaService.post.update({
         where : {
           id : posts.id,
-
         },
         data : {
-          m3u8Url : payload,
+          m3u8Url : payload.files,
           status : 'COMPLETED'
         }
       })
       
       return {
+        success : true,
         message: 'Video is uploaded',
         statusCode : 200
       }

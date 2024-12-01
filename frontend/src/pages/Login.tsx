@@ -23,6 +23,7 @@ const Login = () => {
   const navigate = useNavigate();
 
   const onSubmit = async (data: any) => {
+    setLoading(true);
     const response = await login(data);
     if (response?.success) {
       navigate('/home');

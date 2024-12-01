@@ -1,8 +1,11 @@
-import { createContext, useContext, useState } from 'react';
+import { createContext, useContext, useEffect, useState } from 'react';
 import { apiLogin, logout, apiRegister } from '../api/index';
 import { AxiosError } from 'axios';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import { LocalStorage } from '../utils';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { CircularProgress } from '@mui/material';
 
 export const AuthContext = createContext<{
   user: null;
@@ -21,19 +24,45 @@ export const AuthContext = createContext<{
 const useAuth = () => useContext(AuthContext);
 
 const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(() => {
+    const storedUser = LocalStorage.get('user');
+    return storedUser ? storedUser : null;
+  });
+  const [loading, setLoading] = useState(true);
+
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // check if the user has no accessToken or refreshToken in localstorage then throw him to login
+  useEffect(() => {
+    const accessToken = localStorage.getItem('accessToken');
+    const refreshToken = localStorage.getItem('refreshToken');
+
+    if (!accessToken || !refreshToken) {
+      setUser(null);
+      navigate('/login');
+    } else {
+      // Prevent navigating to login if tokens are valid
+      if (location.pathname === '/login' || location.pathname === '/signup') {
+        navigate('/home');
+      }
+    }
+    setLoading(false);
+  }, [navigate]);
 
   const login = async (data: { email: string; password: string }) => {
     try {
       const response = await apiLogin(data);
-      setUser(response?.data?.data);
       if (response?.data?.success) {
+        setUser(response?.data?.data?.user);
         toast.success(response?.data?.message);
-      } else {
-        toast.error(response?.data?.message);
+        LocalStorage.set('accessToken', response?.data?.data?.tokens?.accessToken);
+        LocalStorage.set('refreshToken', response?.data?.data?.tokens?.refreshToken);
+        LocalStorage.set('user', JSON.stringify(response?.data?.data?.user));
       }
       return response?.data;
     } catch (error) {
+      toast.error(error?.response?.data?.message);
       console.log(error);
     }
   };
@@ -53,7 +82,7 @@ const AuthProvider = ({ children }) => {
         return error?.response?.data;
       }
       console.log(error);
-    } 
+    }
   };
 
   const logout = async () => {
@@ -66,7 +95,9 @@ const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, registerAsync, logout }}>{children}</AuthContext.Provider>
+    <AuthContext.Provider value={{ user, login, registerAsync, logout }}>
+      {loading ? <CircularProgress sx={{ marginTop: '20vh' }} /> : <>{children}</>}
+    </AuthContext.Provider>
   );
 };
 

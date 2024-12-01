@@ -72,6 +72,8 @@ const pollingSQS = async () => {
                         Bucket: bucket.name,
                         Key: object.key
                     };
+                    const decodedKey = decodeURIComponent(params.Key);
+                    console.log('Processing the event', decodedKey);
                     console.log('Processing the event', params);
                     const taskCommand = {
                         taskDefinition: process.env.AWS_ECS_TASK_DEFINITION,
@@ -88,36 +90,17 @@ const pollingSQS = async () => {
                                 {
                                     name: process.env.AWS_ECS_CONTAINER_NAME,
                                     environment: [
-                                        {
-                                            name: 'AWS_BUCKET_NAME',
-                                            value: bucket.name
-                                        },
-                                        {
-                                            name: 'AWS_BUCKET_KEY',
-                                            value: object.key
-                                        },
-                                        {
-                                            name: 'AWS_BUCKET_NAME_2',
-                                            value: process.env.AWS_BUCKET_NAME_2
-                                        },
-                                        {
-                                            name: 'AWS_ACCESS_KEY',
-                                            value: process.env.AWS_ACCESS_KEY
-                                        },
-                                        {
-                                            name: 'AWS_SECRET_ACCESS_KEY',
-                                            value: process.env.AWS_SECRET_ACCESS_KEY
-                                        },
-                                        {
-                                            name: 'AWS_REGION',
-                                            value: process.env.AWS_REGION
-                                        }
+                                        { name: 'AWS_BUCKET_NAME', value: bucket.name },
+                                        { name: 'AWS_BUCKET_KEY', value: object.key },
+                                        { name: 'AWS_BUCKET_NAME_2', value: process.env.AWS_BUCKET_NAME_2 },
+                                        { name: 'AWS_ACCESS_KEY', value: process.env.AWS_ACCESS_KEY },
+                                        { name: 'AWS_SECRET_ACCESS_KEY', value: process.env.AWS_SECRET_ACCESS_KEY },
+                                        { name: 'AWS_REGION', value: process.env.AWS_REGION }
                                     ]
                                 }
                             ]
                         }
                     };
-                    console.log(taskCommand.networkConfiguration.awsvpcConfiguration);
                     await awsClientECS.runTask(taskCommand).promise();
                     console.log('Task started in ECS');
                     await awsClientSQS.deleteMessage({

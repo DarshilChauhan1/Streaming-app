@@ -35,6 +35,7 @@ model Post {
   title        String
   description  String
   user         User     @relation(fields: [userId], references: [id])
+  key          String?  @map("key") 
   userId       String
   m3u8Url      Json?
   thumbnailUrl String

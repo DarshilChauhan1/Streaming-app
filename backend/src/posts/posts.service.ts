@@ -8,13 +8,11 @@ export class PostsService {
   constructor(private prismaService: PrismaService) {}
 
   async findAll(payload : { userId : string }) {
-    console.log(payload);
     try {
       const { userId } = payload;
       const posts = await this.prismaService.post.findMany({
         where: {
-          userId,
-          status : 'COMPLETED'
+          userId
         }
       })
       if(!posts.length){
@@ -42,7 +40,6 @@ export class PostsService {
 
   async findOne(id: string) {
     try {
-      console.log(id);
       const findPost = await this.prismaService.post.findUnique({
         where : {
           id : id,
@@ -52,7 +49,7 @@ export class PostsService {
       if(!findPost){
         return {
           message: 'Post not found',
-          statusCode : 200,
+          statusCode : 404,
           success : false
         }
       }
@@ -60,7 +57,7 @@ export class PostsService {
         message: 'Post found',
         data : findPost,
         success : true,
-        statusCode : 404
+        statusCode : 200
       }
     } catch (error) {
       console.log(error);

@@ -1,18 +1,15 @@
-FROM ubuntu:focal
+# Use a smaller base image with Node.js
+FROM node:18-buster-slim
 
 # Install necessary packages
 RUN apt-get update && \
-    apt-get install -y curl && \
-    curl -sL https://deb.nodesource.com/setup_18.x | bash - && \
-    apt-get update && \
-    apt-get upgrade -y && \
-    apt install -y nano && \
-    apt-get install -y nodejs ffmpeg
+    apt-get install -y --no-install-recommends ffmpeg && \
+    rm -rf /var/lib/apt/lists/*
 
 # Set the working directory
 WORKDIR /app
 
-# Copy package.json and package-lock.json
+# Copy only package.json and package-lock.json for caching layer optimization
 COPY package*.json ./
 
 # Install dependencies
@@ -21,4 +18,5 @@ RUN npm install
 # Copy the rest of the application code
 COPY . .
 
-CMD [ "node", "index.js" ]
+# Start the app
+CMD ["node", "index.js"]

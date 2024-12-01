@@ -7,7 +7,7 @@ const Navbar = () => {
     <AppBar position="sticky" sx={{ backgroundColor: '#FG1111', width : '100%' }}>
       <Toolbar>
         <Typography variant="h6" sx={{ flexGrow: 1 }}>
-          <Link to="/" style={{ textDecoration: 'none', color: 'white' }}>
+          <Link to="/home" style={{ textDecoration: 'none', color: 'white' }}>
             Welcome
           </Link>
         </Typography>

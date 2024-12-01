@@ -59,7 +59,7 @@ export class AuthService {
         success : true,
         statusCode : 200,
         data : {
-          userData,
+          user : userData,
           tokens
         }
       }
